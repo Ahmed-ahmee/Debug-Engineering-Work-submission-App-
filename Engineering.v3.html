@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineering Service Report</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- React and ReactDOM CDNs -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel CDN for JSX transformation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- SignaturePad CDN (removed) -->
+
+    <script type="text/babel">
+        // --- Placeholder for Google Apps Script URLs ---
+        // You will replace these with your actual deployed Google Apps Script URLs
+        // after setting up the backend.
+        const GOOGLE_APPS_SCRIPT_BASE_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
+        const CUSTOMERS_API_URL = `${GOOGLE_APPS_SCRIPT_BASE_URL}?action=getCustomers`;
+        const PRODUCTS_API_URL = `${GOOGLE_APPS_SCRIPT_BASE_URL}?action=getProducts`;
+        const SUBMIT_API_URL = `${GOOGLE_APPS_SCRIPT_BASE_URL}?action=submitReport`;
+
+        // --- Dummy Data (will be replaced by fetched data) ---
+        // This dummy data is used initially. Once your Google Apps Script is set up
+        // and fetching data, you can remove or comment out these dummy arrays.
+        let allCustomers = [
+          { id: 'cust001', name: 'Acme Corp' },
+          { id: 'cust002', name: 'Widgets Inc.' },
+          { id: 'cust003', name: 'Global Solutions' },
+          { id: 'cust004', name: 'Innovate Tech' },
+          { id: 'cust005', name: 'Future Systems' },
+          { id: 'cust006', name: 'Dynamic Solutions' },
+          { id: 'cust007', name: 'Elite Innovations' },
+          { id: 'cust008', name: 'Pinnacle Tech' },
+        ];
+
+        let allProducts = [
+          { id: 'prod001', serial: 'SN-12345', name: 'Product A', description: 'High-performance widget' },
+          { id: 'prod002', serial: 'SN-67890', name: 'Product B', description: 'Industrial-grade sensor' },
+          { id: 'prod003', serial: 'SN-11223', name: 'Product C', description: 'Advanced control unit' },
+          { id: 'prod004', serial: 'SN-44556', name: 'Product A', description: 'High-performance widget (v2)' },
+          { id: 'prod005', serial: 'SN-77889', name: 'Product D', description: 'Precision measurement tool' },
+          { id: 'prod006', serial: 'SN-00112', name: 'Product B', description: 'Industrial-grade sensor (compact)' },
+          { id: 'prod007', serial: 'SN-33445', name: 'Product E', description: 'Smart automation module' },
+          { id: 'prod008', serial: 'SN-66778', name: 'Product F', description: 'Network security appliance' },
+          { id: 'prod009', serial: 'SN-99887', name: 'Product G', description: 'Data Analytics Unit' },
+          { id: 'prod010', serial: 'SN-22110', name: 'Product H', description: 'Cloud Integration Module' },
+          { id: 'prod011', serial: 'SN-55443', name: 'Product I', description: 'AI Processing Chip' },
+          { id: 'prod012', serial: 'SN-88776', name: 'Product J', description: 'Quantum Computing Device' },
+        ];
+
+        const workTypes = [
+          { id: 'work001', name: 'Installation' },
+          { id: 'work002', name: 'Preventive Maintenance' },
+          { id: 'work003', name: 'Corrective Repair' },
+          { id: 'work004', name: 'Software Update' },
+          { id: 'work005', name: 'Consultation' },
+          { id: 'work006', name: 'Training' },
+        ];
+
+        // Helper function to get today's date inYYYY-MM-DD format
+        const getTodayDate = () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // Main App Component
+        const App = () => {
+          const [selectedCustomer, setSelectedCustomer] = React.useState('');
+          const [customerSearchTerm, setCustomerSearchTerm] = React.useState('');
+          const [filteredCustomers, setFilteredCustomers] = React.useState(allCustomers); // Initialize with dummy
+          const [showManualCustomerEntry, setShowManualCustomerEntry] = React.useState(false); // New state for manual customer
+          const [manualCustomerName, setManualCustomerName] = React.useState(''); // New state for manual customer name
+
+          const [selectedDate, setSelectedDate] = React.useState(getTodayDate());
+          const [hasJobNo, setHasJobNo] = React.useState(false); // New state for job number checkbox
+          const [jobNo, setJobNo] = React.useState(''); // Job Number value
+
+          // Product related states for multiple selection
+          const [productSearchTerm, setProductSearchTerm] = React.useState(''); // For searching DB products
+          const [filteredProducts, setFilteredProducts] = React.useState(allProducts); // Products shown in search list (initialize with dummy)
+          const [showManualEntrySection, setShowManualEntrySection] = React.useState(false); // Controls visibility of manual entry
+          const [manualSerialInput, setManualSerialInput] = React.useState(''); // For typing manual serial
+          // Stores an array of { type: 'found' | 'manual', data: productObject | serialString }
+          const [selectedReportedProducts, setSelectedReportedProducts] = React.useState([]);
+
+          // Work type related state (single selection)
+          const [selectedWorkType, setSelectedWorkType] = React.useState('');
+
+          // Signature state (removed)
+          // const signatureCanvasRef = React.useRef(null);
+          // const signaturePadRef = React.useRef(null);
+          // const [signatureData, setSignatureData] = React.useState('');
+
+          const [submissionStatus, setSubmissionStatus] = React.useState('');
+          const [isLoadingData, setIsLoadingData] = React.useState(true); // New loading state for initial data
+          const [dataError, setDataError] = React.useState(''); // New error state for initial data
+
+          // --- Fetch initial data (Customers and Products) from Google Apps Script ---
+          React.useEffect(() => {
+            const fetchData = async () => {
+              setIsLoadingData(true);
+              setDataError('');
+              try {
+                // Fetch Customers
+                // In a real scenario, uncomment and replace with:
+                // const customersResponse = await fetch(CUSTOMERS_API_URL);
+                // const customersData = await customersResponse.json();
+                // allCustomers = customersData; // Update the global variable or state
+                // setFilteredCustomers(customersData);
+
+                // Simulate fetch delay and success
+                await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+                setFilteredCustomers(allCustomers); // Use dummy data for now
+
+                // Fetch Products
+                // In a real scenario, uncomment and replace with:
+                // const productsResponse = await fetch(PRODUCTS_API_URL);
+                // const productsData = await productsResponse.json();
+                // allProducts = productsData; // Update the global variable or state
+                // setFilteredProducts(productsData);
+
+                // Simulate fetch delay and success
+                await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+                setFilteredProducts(allProducts); // Use dummy data for now
+
+
+              } catch (error) {
+                console.error("Error fetching initial data:", error);
+                setDataError("Failed to load customer or product data. Please try again later.");
+              } finally {
+                setIsLoadingData(false);
+              }
+            };
+
+            fetchData();
+          }, []); // Empty dependency array means this runs once on mount
+
+
+          // Initialize SignaturePad (removed)
+          /*
+          React.useEffect(() => {
+            if (signatureCanvasRef.current) {
+              const canvas = signatureCanvasRef.current;
+              
+              // Function to resize canvas
+              const resizeCanvas = () => {
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                // Important: Clear the signature pad after resizing to prevent distortion
+                if (signaturePadRef.current) {
+                  signaturePadRef.current.clear();
+                  setSignatureData(''); // Also clear the data state
+                }
+              };
+
+              signaturePadRef.current = new SignaturePad(canvas, {
+                backgroundColor: 'rgb(249, 250, 251)', // Match gray-50 background
+              });
+
+              // Initial resize
+              resizeCanvas();
+
+              // Add event listener for window resize
+              window.addEventListener('resize', resizeCanvas);
+
+              // Update signatureData when drawing starts or ends
+              signaturePadRef.current.onEnd = () => {
+                if (!signaturePadRef.current.isEmpty()) {
+                  setSignatureData(signaturePadRef.current.toDataURL());
+                } else {
+                  setSignatureData('');
+                }
+              };
+            }
+
+            // Cleanup function
+            return () => {
+              if (signaturePadRef.current) {
+                signaturePadRef.current.off();
+                signaturePadRef.current = null;
+              }
+              window.removeEventListener('resize', resizeCanvas); // Remove listener on unmount
+            };
+          }, []);
+          */
+
+          // Clear signature handler (removed)
+          /*
+          const handleClearSignature = () => {
+            if (signaturePadRef.current) {
+              signaturePadRef.current.clear();
+              setSignatureData('');
+              setSubmissionStatus('');
+            }
+          };
+          */
+
+          // Effect to filter customers based on search term
+          React.useEffect(() => {
+            setFilteredCustomers(
+              allCustomers.filter(customer =>
+                customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase())
+              )
+            );
+          }, [customerSearchTerm]);
+
+          // Effect to filter products based on search term
+          React.useEffect(() => {
+            setFilteredProducts(
+              allProducts.filter(product =>
+                product.serial.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+                product.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+                product.description.toLowerCase().includes(product.description.toLowerCase())
+              )
+            );
+          }, [productSearchTerm]);
+
+
+          // Handle customer search input change
+          const handleCustomerSearchChange = (event) => {
+            setCustomerSearchTerm(event.target.value);
+            setSelectedCustomer(''); // Clear selected customer when searching
+            setSubmissionStatus('');
+            setShowManualCustomerEntry(false); // Hide manual entry if searching
+            setManualCustomerName(''); // Clear manual name
+          };
+
+          // Handle customer selection from filtered list
+          const handleCustomerSelect = (customerId) => {
+            setSelectedCustomer(customerId);
+            setCustomerSearchTerm(allCustomers.find(c => c.id === customerId)?.name || ''); // Display selected name in search box
+            setSubmissionStatus('');
+            setShowManualCustomerEntry(false); // Hide manual entry if selecting from DB
+            setManualCustomerName(''); // Clear manual name
+          };
+
+          // Handle manual customer entry toggle
+          const handleToggleManualCustomerEntry = () => {
+            setShowManualCustomerEntry(!showManualCustomerEntry);
+            setSelectedCustomer(''); // Clear selected customer if toggling manual
+            setCustomerSearchTerm(''); // Clear search term if toggling manual
+            setManualCustomerName(''); // Clear manual name
+            setSubmissionStatus('');
+          };
+
+          // Handle manual customer name input change
+          const handleManualCustomerNameChange = (event) => {
+            setManualCustomerName(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle job number checkbox change
+          const handleHasJobNoChange = (event) => {
+            setHasJobNo(event.target.checked);
+            if (!event.target.checked) {
+              setJobNo(''); // Clear job number if checkbox is unchecked
+            }
+            setSubmissionStatus('');
+          };
+
+          // Handle job number input change
+          const handleJobNoChange = (event) => {
+            setJobNo(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle date change
+          const handleDateChange = (event) => {
+            setSelectedDate(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle product search input change
+          const handleProductSearchChange = (event) => {
+            setProductSearchTerm(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle selecting a product from the filtered list (from DB)
+          const handleSelectProductFromDB = (product) => {
+            // Prevent adding duplicates
+            const isDuplicate = selectedReportedProducts.some(item =>
+              item.type === 'found' && item.data.id === product.id
+            );
+
+            if (isDuplicate) {
+              setSubmissionStatus(`Product ${product.serial} has already been added.`);
+              return;
+            }
+
+            setSelectedReportedProducts((prev) => [...prev, { type: 'found', data: product }]);
+            setProductSearchTerm(''); // Clear search input after adding
+            setSubmissionStatus('');
+          };
+
+          // Handle manual serial input change
+          const handleManualSerialInputChange = (event) => {
+            setManualSerialInput(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle adding a manual product
+          const handleAddManualProduct = () => {
+            const serial = manualSerialInput.trim();
+            if (!serial) {
+              setSubmissionStatus('Please enter a serial number for manual entry.');
+              return;
+            }
+
+            // Prevent adding duplicates
+            const isDuplicate = selectedReportedProducts.some(item =>
+              item.type === 'manual' && item.data.toLowerCase() === serial.toLowerCase()
+            );
+
+            if (isDuplicate) {
+              setSubmissionStatus(`Manual serial ${serial} has already been added.`);
+              return;
+            }
+
+            setSelectedReportedProducts((prev) => [...prev, { type: 'manual', data: serial }]);
+            setManualSerialInput(''); // Clear input after adding
+            setSubmissionStatus('');
+          };
+
+          // Handle removing a product from the list
+          const handleRemoveProduct = (indexToRemove) => {
+            setSelectedReportedProducts((prev) => prev.filter((_, index) => index !== indexToRemove));
+            setSubmissionStatus('');
+          };
+
+          // Handle work type selection change (single selection)
+          const handleWorkTypeChange = (event) => {
+            setSelectedWorkType(event.target.value);
+            setSubmissionStatus('');
+          };
+
+          // Handle form submission
+          const handleSubmit = async (event) => { // Made async to await fetch
+            event.preventDefault();
+
+            // Updated validation to exclude signature
+            const isCustomerValid = selectedCustomer || (showManualCustomerEntry && manualCustomerName.trim());
+            const isJobNoValid = !hasJobNo || (hasJobNo && jobNo.trim()); // Job number is only required if hasJobNo is true
+
+            if (!isCustomerValid || !selectedDate || !isJobNoValid || !selectedWorkType || selectedReportedProducts.length === 0) {
+              setSubmissionStatus('Please fill in all required fields (Customer, Date, Work Type, and at least one Product). If "I have a Job Number" is checked, please provide the Job Number.');
+              return;
+            }
+
+            const formData = {
+              date: selectedDate,
+              jobNo: hasJobNo ? jobNo.trim() : 'N/A', // Only include jobNo if checkbox is checked
+              customer: selectedCustomer
+                ? allCustomers.find(cust => cust.id === selectedCustomer)?.name
+                : manualCustomerName.trim(),
+              customerId: selectedCustomer || 'manual-' + manualCustomerName.trim(), // Use manual prefix for ID
+              products: selectedReportedProducts.map(item => {
+                if (item.type === 'found') {
+                  return { id: item.data.id, serial: item.data.serial, name: item.data.name, description: item.data.description };
+                } else { // type === 'manual'
+                  return { id: 'manual-' + item.data, serial: item.data, name: 'Manually Entered', description: 'N/A' };
+                }
+              }),
+              workType: workTypes.find(wt => wt.id === selectedWorkType)?.name,
+              workTypeId: selectedWorkType,
+              // signature: signatureData, // Signature data removed
+              timestamp: new Date().toISOString(),
+            };
+
+            console.log('Attempting to submit Form Data:', formData);
+            setSubmissionStatus('Submitting form...');
+
+            try {
+                // --- Send formData to Google Apps Script ---
+                // In a real scenario, uncomment and replace with your actual Apps Script URL
+                /*
+                const response = await fetch(SUBMIT_API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Required for simple POST requests to Apps Script from client-side
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+
+                // Note: With 'no-cors' mode, you cannot read the response body directly.
+                // The Apps Script would typically confirm success by writing to the sheet.
+                // For more robust feedback, you'd need a more complex CORS setup or a different backend.
+                */
+
+                // Simulate successful submission
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+                console.log('Form data sent (simulated).');
+                setSubmissionStatus('Form submitted successfully! Check console for data.');
+
+                // Optionally reset form after submission
+                setSelectedCustomer('');
+                setCustomerSearchTerm('');
+                setShowManualCustomerEntry(false);
+                setManualCustomerName('');
+                setHasJobNo(false); // Reset job number checkbox
+                setJobNo(''); // Reset Job Number
+                setProductSearchTerm('');
+                setFilteredProducts(allProducts); // Reset filtered products
+                setShowManualEntrySection(false);
+                setManualSerialInput('');
+                setSelectedReportedProducts([]);
+                setSelectedWorkType('');
+                setSelectedDate(getTodayDate()); // Reset date to today
+                // handleClearSignature(); // Clear signature after submission (removed)
+
+            } catch (error) {
+                console.error("Error submitting form:", error);
+                setSubmissionStatus("Failed to submit form. Please try again.");
+            }
+          };
+
+          if (isLoadingData) {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8 flex items-center justify-center font-inter">
+                <div className="text-indigo-800 text-xl font-semibold">Loading data...</div>
+              </div>
+            );
+          }
+
+          if (dataError) {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8 flex items-center justify-center font-inter">
+                <div className="text-red-600 text-xl font-semibold">{dataError}</div>
+              </div>
+            );
+          }
+
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8 flex items-center justify-center font-inter">
+              <div className="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-blue-200 relative"> {/* Added relative for date picker positioning */}
+                {/* Company Logo */}
+                <img
+                  src="https://debug.lk/wp-content/uploads/2022/02/download-e1646848771557.png"
+                  alt="Company Logo"
+                  className="block mx-auto h-20 mb-6"
+                  onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/150x50/cccccc/333333?text=Logo+Placeholder'; }}
+                />
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-indigo-800 mb-6 text-center">
+                  Engineering Service Report
+                </h1>
+
+                {/* Date Picker - Top Right Corner */}
+                <div className="absolute top-4 right-4 z-10"> {/* Positioned absolutely */}
+                    <label htmlFor="reportDate" className="block text-sm font-medium text-gray-700 mb-1">
+                        Date: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="date"
+                        id="reportDate"
+                        name="reportDate"
+                        value={selectedDate}
+                        onChange={handleDateChange}
+                        className="w-36 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        required
+                    />
+                </div>
+
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Customer Search and Selection */}
+                  <div>
+                    <label htmlFor="customerSearch" className="block text-lg font-medium text-gray-700 mb-2">
+                      Search & Select Customer: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="customerSearch"
+                      name="customerSearch"
+                      value={customerSearchTerm}
+                      onChange={handleCustomerSearchChange}
+                      placeholder="Type to search for a customer..."
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                      disabled={showManualCustomerEntry} // Disable search if manual entry is active
+                    />
+                    {customerSearchTerm && filteredCustomers.length > 0 && !selectedCustomer && !showManualCustomerEntry && (
+                      <div className="mt-2 border border-gray-200 rounded-lg shadow-md max-h-48 overflow-y-auto">
+                        {filteredCustomers.map((customer) => (
+                          <div
+                            key={customer.id}
+                            className={`p-3 cursor-pointer hover:bg-indigo-50 ${selectedCustomer === customer.id ? 'bg-indigo-100 font-semibold' : ''}`}
+                            onClick={() => handleCustomerSelect(customer.id)}
+                          >
+                            {customer.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {customerSearchTerm && filteredCustomers.length === 0 && !selectedCustomer && !showManualCustomerEntry && (
+                      <p className="mt-2 text-sm text-gray-500">No customers found matching your search.</p>
+                    )}
+                    {selectedCustomer && (
+                      <p className="mt-2 text-sm text-green-700 font-medium">Selected Customer: <span className="font-semibold">{allCustomers.find(c => c.id === selectedCustomer)?.name}</span></p>
+                    )}
+
+                    {/* "Customer Not Found?" Button */}
+                    <div className="mt-4 text-center">
+                      <button
+                        type="button"
+                        onClick={handleToggleManualCustomerEntry}
+                        className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg shadow-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-all duration-200 ease-in-out font-semibold"
+                      >
+                        {showManualCustomerEntry ? 'Hide Manual Customer Entry' : 'Customer Not Found?'}
+                      </button>
+                    </div>
+
+                    {/* Manual Customer Entry Section (Conditional) */}
+                    {showManualCustomerEntry && (
+                      <div className="mt-6 p-4 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                        <label htmlFor="manualCustomerNameInput" className="block text-lg font-medium text-gray-700 mb-2">
+                          Manually Enter Customer Name: <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="manualCustomerNameInput"
+                          name="manualCustomerNameInput"
+                          value={manualCustomerName}
+                          onChange={handleManualCustomerNameChange}
+                          placeholder="Enter new customer name..."
+                          className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                          required={showManualCustomerEntry}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Job Number Checkbox and Input */}
+                  <div>
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="checkbox"
+                        id="hasJobNo"
+                        checked={hasJobNo}
+                        onChange={handleHasJobNoChange}
+                        className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <label htmlFor="hasJobNo" className="ml-2 text-lg font-medium text-gray-700 cursor-pointer">
+                        I have a Job Number
+                      </label>
+                    </div>
+                    {hasJobNo && (
+                      <div>
+                        <label htmlFor="jobNo" className="block text-lg font-medium text-gray-700 mb-2">
+                          Job Number: <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="jobNo"
+                          name="jobNo"
+                          value={jobNo}
+                          onChange={handleJobNoChange}
+                          placeholder="Enter job number..."
+                          className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                          required={hasJobNo}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product Serial Number (Search & Select from DB) */}
+                  <div>
+                    <label htmlFor="productSearch" className="block text-lg font-medium text-gray-700 mb-2">
+                      Search & Select Product (from Database): <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="productSearch"
+                      name="productSearch"
+                      value={productSearchTerm}
+                      onChange={handleProductSearchChange}
+                      placeholder="Type serial number or product name..."
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                    />
+                    {productSearchTerm && filteredProducts.length > 0 && (
+                      <div className="mt-2 border border-gray-200 rounded-lg shadow-md max-h-48 overflow-y-auto">
+                        {filteredProducts.map((product) => (
+                          <div
+                            key={product.id}
+                            className="p-3 cursor-pointer hover:bg-indigo-50"
+                            onClick={() => handleSelectProductFromDB(product)}
+                          >
+                            <span className="font-semibold">{product.serial}</span> - {product.name} ({product.description})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {productSearchTerm && filteredProducts.length === 0 && (
+                      <p className="mt-2 text-sm text-gray-500">No products found matching your search.</p>
+                    )}
+
+                    {/* "Product Not Found?" Button */}
+                    <div className="mt-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowManualEntrySection(!showManualEntrySection)}
+                        className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg shadow-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-all duration-200 ease-in-out font-semibold"
+                      >
+                        {showManualEntrySection ? 'Hide Manual Entry' : 'Product Not Found?'}
+                      </button>
+                    </div>
+
+                    {/* Manual Serial Number Entry Section (Conditional) */}
+                    {showManualEntrySection && (
+                      <div className="mt-6 p-4 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                        <label htmlFor="manualSerialInput" className="block text-lg font-medium text-gray-700 mb-2">
+                          Manually Enter Serial Number: <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            id="manualSerialInput"
+                            name="manualSerialInput"
+                            value={manualSerialInput}
+                            onChange={handleManualSerialInputChange}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddManualProduct();
+                                }
+                            }}
+                            placeholder="Enter serial number manually..."
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddManualProduct}
+                            className="px-6 py-3 bg-green-500 text-white rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 ease-in-out font-semibold"
+                          >
+                            Add Manual
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* List of Added Products (Found from DB + Manual) */}
+                    {selectedReportedProducts.length > 0 && (
+                      <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50 max-h-48 overflow-y-auto">
+                        <p className="font-semibold text-gray-700 mb-2">Added Products for Report:</p>
+                        <ul className="space-y-2">
+                          {selectedReportedProducts.map((item, index) => (
+                            <li key={`${item.type}-${item.data.id || item.data}-${index}`} className="flex items-center justify-between p-2 bg-white rounded-md shadow-sm border border-gray-100">
+                              <span className="text-gray-800">
+                                {item.type === 'found' ? (
+                                  <>
+                                    <span className="font-medium">{item.data.serial}</span> - {item.data.name} ({item.data.description})
+                                  </>
+                                ) : (
+                                  <span className="font-medium text-red-600">{item.data} (Manually Entered)</span>
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProduct(index)}
+                                className="ml-4 p-1 rounded-full text-red-500 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                aria-label="Remove product"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm2 4a1 1 0 100 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Work Type Selection - Single selection */}
+                  <div>
+                    <label htmlFor="workType" className="block text-lg font-medium text-gray-700 mb-2">
+                      Type of Work Done: <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="workType"
+                        name="workType"
+                        value={selectedWorkType}
+                        onChange={handleWorkTypeChange}
+                        className="block w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base appearance-none bg-white"
+                        required
+                      >
+                        <option value="">-- Select Work Type --</option>
+                        {workTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Signature Panel (removed) */}
+                  {/*
+                  <div>
+                    <label className="block text-lg font-medium text-gray-700 mb-2">
+                      Customer Signature: <span className="text-red-500">*</span>
+                    </label>
+                    <div className="signature-pad-border w-full h-48 sm:h-56 relative overflow-hidden">
+                      <canvas
+                        ref={signatureCanvasRef}
+                        className="w-full h-full block"
+                        style={{ touchAction: 'none' }}
+                      ></canvas>
+                    </div>
+                    <div className="mt-2 text-right">
+                      <button
+                        type="button"
+                        onClick={handleClearSignature}
+                        className="px-4 py-2 bg-red-500 text-white rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 ease-in-out text-sm font-semibold"
+                      >
+                        Clear Signature
+                      </button>
+                    </div>
+                  </div>
+                  */}
+
+                  {/* Submission Status Message */}
+                  {submissionStatus && (
+                    <p className={`text-center text-sm font-medium ${submissionStatus.includes('successfully') ? 'text-green-600' : 'text-red-600'}`}>
+                      {submissionStatus}
+                    </p>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 ease-in-out text-lg font-semibold transform hover:scale-105"
+                  >
+                    Submit Report
+                  </button>
+                </form>
+              </div>
+            </div>
+          );
+        };
+
+        // Render the App component into the 'root' div
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

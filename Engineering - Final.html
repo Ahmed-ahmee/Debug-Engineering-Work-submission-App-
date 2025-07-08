@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineering Service Report</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- React and ReactDOM CDNs -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel CDN for JSX transformation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        // --- IMPORTANT: PASTE YOUR DEPLOYED URL HERE ---
+        // After deploying the Google Apps Script, you will get a URL. Paste it below.
+        const GOOGLE_APPS_SCRIPT_BASE_URL = 'https://script.google.com/macros/s/AKfycbxG_R_Po55j_HxPmiJCaV3CfkFZhwb5zg1afp7wuAFdfqsqlQDB4MTFXHSNdDAFe6Xm/exec';
+        // --- END OF URL SECTION ---
+
+        const CUSTOMERS_API_URL = `${GOOGLE_APPS_SCRIPT_BASE_URL}?action=getCustomers`;
+        const PRODUCTS_API_URL = `${GOOGLE_APPS_SCRIPT_BASE_URL}?action=getProducts`;
+        const SUBMIT_API_URL = GOOGLE_APPS_SCRIPT_BASE_URL; // POST requests go to the base URL
+
+        const workTypes = [
+          { id: 'work001', name: 'Installation' },
+          { id: 'work002', name: 'Preventive Maintenance' },
+          { id: 'work003', name: 'Corrective Repair' },
+          { id: 'work004', name: 'Software Update' },
+          { id: 'work005', name: 'Consultation' },
+          { id: 'work006', name: 'Training' },
+        ];
+
+        // Helper function to get today's date in YYYY-MM-DD format
+        const getTodayDate = () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // Main App Component
+        const App = () => {
+          // --- State Management ---
+          // Data stores
+          const [allCustomers, setAllCustomers] = React.useState([]);
+          const [allProducts, setAllProducts] = React.useState([]);
+
+          // UI / Form states
+          const [selectedCustomer, setSelectedCustomer] = React.useState('');
+          const [customerSearchTerm, setCustomerSearchTerm] = React.useState('');
+          const [filteredCustomers, setFilteredCustomers] = React.useState([]);
+          const [showManualCustomerEntry, setShowManualCustomerEntry] = React.useState(false);
+          const [manualCustomerName, setManualCustomerName] = React.useState('');
+
+          const [selectedDate, setSelectedDate] = React.useState(getTodayDate());
+          const [hasJobNo, setHasJobNo] = React.useState(false);
+          const [jobNo, setJobNo] = React.useState('');
+
+          const [productSearchTerm, setProductSearchTerm] = React.useState('');
+          const [filteredProducts, setFilteredProducts] = React.useState([]);
+          const [showManualEntrySection, setShowManualEntrySection] = React.useState(false);
+          const [manualSerialInput, setManualSerialInput] = React.useState('');
+          const [selectedReportedProducts, setSelectedReportedProducts] = React.useState([]);
+
+          const [selectedWorkType, setSelectedWorkType] = React.useState('');
+
+          // App status states
+          const [submissionStatus, setSubmissionStatus] = React.useState('');
+          const [isSubmitting, setIsSubmitting] = React.useState(false);
+          const [isLoadingData, setIsLoadingData] = React.useState(true);
+          const [dataError, setDataError] = React.useState('');
+
+          // --- Data Fetching Effect ---
+          React.useEffect(() => {
+            const fetchData = async () => {
+              if (GOOGLE_APPS_SCRIPT_BASE_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                  setDataError("Please update the GOOGLE_APPS_SCRIPT_BASE_URL in the HTML file with your deployed script URL.");
+                  setIsLoadingData(false);
+                  return;
+              }
+              setIsLoadingData(true);
+              setDataError('');
+              try {
+                // Fetch Customers and Products in parallel
+                const [customersResponse, productsResponse] = await Promise.all([
+                  fetch(CUSTOMERS_API_URL),
+                  fetch(PRODUCTS_API_URL)
+                ]);
+
+                if (!customersResponse.ok || !productsResponse.ok) {
+                    throw new Error('Network response was not ok.');
+                }
+
+                const customersData = await customersResponse.json();
+                const productsData = await productsResponse.json();
+                
+                setAllCustomers(customersData);
+                setFilteredCustomers(customersData);
+                
+                setAllProducts(productsData);
+                setFilteredProducts(productsData);
+
+              } catch (error) {
+                console.error("Error fetching initial data:", error);
+                setDataError("Failed to load customer or product data. Please check the console and ensure your Apps Script URL is correct and deployed for 'Anyone' access.");
+              } finally {
+                setIsLoadingData(false);
+              }
+            };
+
+            fetchData();
+          }, []);
+
+
+          // --- Filtering Effects ---
+          React.useEffect(() => {
+            setFilteredCustomers(
+              allCustomers.filter(customer =>
+                customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase())
+              )
+            );
+          }, [customerSearchTerm, allCustomers]);
+
+          React.useEffect(() => {
+            setFilteredProducts(
+              allProducts.filter(product =>
+                product.serial.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+                product.name.toLowerCase().includes(productSearchTerm.toLowerCase())
+              )
+            );
+          }, [productSearchTerm, allProducts]);
+
+
+          // --- Event Handlers ---
+          const handleCustomerSearchChange = (event) => {
+            setCustomerSearchTerm(event.target.value);
+            setSelectedCustomer('');
+            setShowManualCustomerEntry(false);
+            setManualCustomerName('');
+          };
+
+          const handleCustomerSelect = (customerId) => {
+            setSelectedCustomer(customerId);
+            setCustomerSearchTerm(allCustomers.find(c => c.id === customerId)?.name || '');
+            setShowManualCustomerEntry(false);
+            setManualCustomerName('');
+          };
+
+          const handleToggleManualCustomerEntry = () => {
+            setShowManualCustomerEntry(!showManualCustomerEntry);
+            setSelectedCustomer('');
+            setCustomerSearchTerm('');
+            setManualCustomerName('');
+          };
+          
+          const handleAddManualProduct = () => {
+            const serial = manualSerialInput.trim();
+            if (!serial) {
+              setSubmissionStatus({ type: 'error', message: 'Please enter a serial number.' });
+              return;
+            }
+            const isDuplicate = selectedReportedProducts.some(p => p.data.serial?.toLowerCase() === serial.toLowerCase());
+            if (isDuplicate) {
+              setSubmissionStatus({ type: 'error', message: `Serial ${serial} is already added.` });
+              return;
+            }
+            setSelectedReportedProducts(prev => [...prev, { type: 'manual', data: { serial } }]);
+            setManualSerialInput('');
+            setSubmissionStatus('');
+          };
+          
+          const handleSelectProductFromDB = (product) => {
+            const isDuplicate = selectedReportedProducts.some(p => p.data.id === product.id);
+            if (isDuplicate) {
+              setSubmissionStatus({ type: 'error', message: `Product ${product.serial} is already added.`});
+              return;
+            }
+            setSelectedReportedProducts(prev => [...prev, { type: 'found', data: product }]);
+            setProductSearchTerm('');
+            setSubmissionStatus('');
+          };
+
+          const handleRemoveProduct = (indexToRemove) => {
+            setSelectedReportedProducts(prev => prev.filter((_, index) => index !== indexToRemove));
+          };
+
+          const resetForm = () => {
+             setSelectedCustomer('');
+             setCustomerSearchTerm('');
+             setShowManualCustomerEntry(false);
+             setManualCustomerName('');
+             setHasJobNo(false);
+             setJobNo('');
+             setProductSearchTerm('');
+             setShowManualEntrySection(false);
+             setManualSerialInput('');
+             setSelectedReportedProducts([]);
+             setSelectedWorkType('');
+             setSelectedDate(getTodayDate());
+          };
+
+          const handleSubmit = async (event) => {
+            event.preventDefault();
+            setSubmissionStatus('');
+
+            const isCustomerValid = selectedCustomer || (showManualCustomerEntry && manualCustomerName.trim());
+            const isJobNoValid = !hasJobNo || (hasJobNo && jobNo.trim());
+
+            if (!isCustomerValid || !selectedDate || !isJobNoValid || !selectedWorkType || selectedReportedProducts.length === 0) {
+              setSubmissionStatus({ type: 'error', message: 'Please fill all required fields: Customer, Date, Work Type, and at least one Product.' });
+              return;
+            }
+
+            const formData = {
+              date: selectedDate,
+              jobNo: hasJobNo ? jobNo.trim() : 'N/A',
+              customer: selectedCustomer ? allCustomers.find(c => c.id === selectedCustomer)?.name : manualCustomerName.trim(),
+              customerId: selectedCustomer || 'manual-' + manualCustomerName.trim(),
+              products: selectedReportedProducts.map(item => {
+                  if (item.type === 'found') {
+                      return { id: item.data.id, serial: item.data.serial, name: item.data.name };
+                  } else { // 'manual'
+                      return { id: 'manual-' + item.data.serial, serial: item.data.serial, name: 'Manually Entered' };
+                  }
+              }),
+              workType: workTypes.find(wt => wt.id === selectedWorkType)?.name,
+              timestamp: new Date().toISOString(),
+            };
+
+            setIsSubmitting(true);
+            setSubmissionStatus({ type: 'info', message: 'Submitting report...' });
+
+            try {
+                // --- Send formData to Google Apps Script ---
+                const response = await fetch(SUBMIT_API_URL, {
+                    method: 'POST',
+                    // We can't use 'application/json' directly due to CORS limitations in simple browser setups.
+                    // Apps Script expects the payload in a specific way for simple POSTs.
+                    // We send it as plain text and parse it on the server side.
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(formData),
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    setSubmissionStatus({ type: 'success', message: 'Report submitted successfully!' });
+                    resetForm();
+                } else {
+                    throw new Error(result.message || 'An unknown error occurred on the server.');
+                }
+
+            } catch (error) {
+                console.error("Error submitting form:", error);
+                setSubmissionStatus({ type: 'error', message: `Submission failed: ${error.message}` });
+            } finally {
+                setIsSubmitting(false);
+            }
+          };
+
+          // --- Conditional Rendering for Loading/Error States ---
+          if (isLoadingData) {
+            return (
+              <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                <div className="text-indigo-600 text-xl font-semibold">Loading data...</div>
+              </div>
+            );
+          }
+
+          if (dataError) {
+            return (
+              <div className="min-h-screen bg-red-50 p-8 flex items-center justify-center">
+                <div className="text-center">
+                    <h2 className="text-xl font-bold text-red-700">Error</h2>
+                    <p className="mt-2 text-red-600 max-w-md">{dataError}</p>
+                </div>
+              </div>
+            );
+          }
+
+          // --- Main JSX Return ---
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8 flex items-center justify-center font-inter">
+              <div className="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-blue-200 relative">
+                <img
+                  src="https://debug.lk/wp-content/uploads/2022/02/download-e1646848771557.png"
+                  alt="Company Logo"
+                  className="block mx-auto h-20 mb-6"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-indigo-800 mb-6 text-center">
+                  Engineering Service Report
+                </h1>
+                
+                <div className="absolute top-4 right-4 z-10">
+                    <label htmlFor="reportDate" className="block text-sm font-medium text-gray-700 mb-1">
+                        Date: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="date" id="reportDate" name="reportDate"
+                        value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-36 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                        required
+                    />
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Customer Section */}
+                  <div>
+                    <label htmlFor="customerSearch" className="block text-lg font-medium text-gray-700 mb-2">
+                      Customer: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text" id="customerSearch" name="customerSearch"
+                      value={customerSearchTerm} onChange={handleCustomerSearchChange}
+                      placeholder="Type to search for a customer..."
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={showManualCustomerEntry}
+                    />
+                    {customerSearchTerm && filteredCustomers.length > 0 && !selectedCustomer && !showManualCustomerEntry && (
+                      <div className="mt-2 border border-gray-200 rounded-lg shadow-md max-h-48 overflow-y-auto">
+                        {filteredCustomers.map((customer) => (
+                          <div
+                            key={customer.id} onClick={() => handleCustomerSelect(customer.id)}
+                            className="p-3 cursor-pointer hover:bg-indigo-50"
+                          >
+                            {customer.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2 text-center">
+                      <button type="button" onClick={handleToggleManualCustomerEntry} className="px-5 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold">
+                        {showManualCustomerEntry ? 'Search Existing Customer' : 'Customer Not Found?'}
+                      </button>
+                    </div>
+                    {showManualCustomerEntry && (
+                      <div className="mt-4 p-4 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                        <label htmlFor="manualCustomerNameInput" className="block font-medium text-gray-700 mb-2">
+                          Manually Enter Customer Name: <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text" id="manualCustomerNameInput" value={manualCustomerName}
+                          onChange={(e) => setManualCustomerName(e.target.value)}
+                          placeholder="Enter new customer name..."
+                          className="block w-full px-4 py-3 border border-gray-300 rounded-lg"
+                          required={showManualCustomerEntry}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Job Number Section */}
+                  <div>
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="checkbox" id="hasJobNo" checked={hasJobNo}
+                        onChange={(e) => setHasJobNo(e.target.checked)}
+                        className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                      />
+                      <label htmlFor="hasJobNo" className="ml-2 text-lg font-medium text-gray-700">
+                        I have a Job Number
+                      </label>
+                    </div>
+                    {hasJobNo && (
+                      <input
+                        type="text" id="jobNo" name="jobNo" value={jobNo}
+                        onChange={(e) => setJobNo(e.target.value)}
+                        placeholder="Enter job number..."
+                        className="block w-full px-4 py-3 border border-gray-300 rounded-lg"
+                        required={hasJobNo}
+                      />
+                    )}
+                  </div>
+
+                  {/* Product Section */}
+                  <div>
+                    <label htmlFor="productSearch" className="block text-lg font-medium text-gray-700 mb-2">
+                      Product(s) Serviced: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text" id="productSearch" value={productSearchTerm}
+                      onChange={(e) => setProductSearchTerm(e.target.value)}
+                      placeholder="Search serial or name from database..."
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    />
+                    {productSearchTerm && filteredProducts.length > 0 && (
+                      <div className="mt-2 border rounded-lg shadow-md max-h-48 overflow-y-auto">
+                        {filteredProducts.map((product) => (
+                          <div
+                            key={product.id} onClick={() => handleSelectProductFromDB(product)}
+                            className="p-3 cursor-pointer hover:bg-indigo-50"
+                          >
+                            <span className="font-semibold">{product.serial}</span> - {product.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2 text-center">
+                      <button type="button" onClick={() => setShowManualEntrySection(!showManualEntrySection)} className="px-5 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold">
+                         {showManualEntrySection ? 'Hide Manual Entry' : 'Product Not In Database?'}
+                      </button>
+                    </div>
+                    {showManualEntrySection && (
+                      <div className="mt-4 p-4 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                        <label htmlFor="manualSerialInput" className="block font-medium text-gray-700 mb-2">
+                          Manually Enter Serial Number:
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text" id="manualSerialInput" value={manualSerialInput}
+                            onChange={(e) => setManualSerialInput(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddManualProduct())}
+                            placeholder="Enter serial and press Add"
+                            className="flex-1 px-4 py-3 border rounded-lg"
+                          />
+                          <button type="button" onClick={handleAddManualProduct} className="px-6 py-3 bg-green-500 text-white rounded-lg font-semibold">
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {selectedReportedProducts.length > 0 && (
+                      <div className="mt-4 p-3 border rounded-lg bg-gray-50 max-h-48 overflow-y-auto">
+                        <p className="font-semibold text-gray-700 mb-2">Added Products:</p>
+                        <ul className="space-y-2">
+                          {selectedReportedProducts.map((item, index) => (
+                            <li key={index} className="flex items-center justify-between p-2 bg-white rounded-md shadow-sm">
+                              <span className="text-gray-800">
+                                {item.type === 'found' ? (
+                                  <><span className="font-medium">{item.data.serial}</span> - {item.data.name}</>
+                                ) : (
+                                  <><span className="font-medium text-blue-600">{item.data.serial}</span> (Manual)</>
+                                )}
+                              </span>
+                              <button type="button" onClick={() => handleRemoveProduct(index)} className="p-1 rounded-full text-red-500 hover:bg-red-100">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Work Type Section */}
+                  <div>
+                    <label htmlFor="workType" className="block text-lg font-medium text-gray-700 mb-2">
+                      Type of Work Done: <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="workType" name="workType" value={selectedWorkType}
+                      onChange={(e) => setSelectedWorkType(e.target.value)}
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-white"
+                      required
+                    >
+                      <option value="">-- Select Work Type --</option>
+                      {workTypes.map((type) => (
+                        <option key={type.id} value={type.id}>{type.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Submission Status & Button */}
+                  {submissionStatus && (
+                    <p className={`text-center font-medium ${
+                        submissionStatus.type === 'success' ? 'text-green-600' :
+                        submissionStatus.type === 'error' ? 'text-red-600' : 'text-blue-600'
+                    }`}>
+                      {submissionStatus.message}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-indigo-600 text-white py-3 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-all text-lg font-semibold"
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit Report'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
